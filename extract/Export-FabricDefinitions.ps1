@@ -18,7 +18,7 @@
 [CmdletBinding()]
 param(
   [string[]]$WorkspaceNames,                 # omit to export every workspace you can see
-  [string]$OutDir = "../output/raw",
+  [string]$OutDir = "./output/raw",
   [string[]]$ItemTypes = @("SemanticModel", "Report"),
   [int]$PollSeconds = 3,
   [int]$MaxPolls = 60
@@ -26,6 +26,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $FabricApi = "https://api.fabric.microsoft.com/v1"
+
+# .NET file APIs resolve relative paths against the process directory (often C:\Windows\System32),
+# not the PowerShell location, so convert OutDir to an absolute path up front.
+$OutDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutDir)
 
 function Get-FabricHeaders {
   $token = (Get-AzAccessToken -ResourceUrl "https://api.fabric.microsoft.com").Token
@@ -51,7 +55,7 @@ function Get-ItemDefinition([string]$WorkspaceId, [string]$ItemId, [string]$Form
   $url = "$FabricApi/workspaces/$WorkspaceId/items/$ItemId/getDefinition"
   if ($Format) { $url += "?format=$Format" }
 
-  $resp = Invoke-WebRequest -Uri $url -Headers (Get-FabricHeaders) -Method Post -Body "{}"
+  $resp = Invoke-WebRequest -UseBasicParsing -Uri $url -Headers (Get-FabricHeaders) -Method Post -Body "{}"
   if ($resp.StatusCode -eq 200) { return ($resp.Content | ConvertFrom-Json).definition }
 
   # 202 Accepted -> poll Location, then fetch /result

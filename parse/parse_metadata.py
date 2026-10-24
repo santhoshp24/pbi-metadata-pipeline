@@ -38,6 +38,25 @@ def _block_text(lines: list[str], start: int, base_indent: int) -> tuple[str, in
     return "\n".join(out).strip(), i
 
 
+def _fenced(lines: list[str], i: int, first: str) -> tuple[str, int]:
+    """Read a ```-fenced expression that starts on line i (after '=') and return (text, next_line)."""
+    head = first.strip()[3:]
+    if head.strip().endswith("```"):
+        return head.strip()[:-3].strip(), i + 1
+    body = [head.strip()] if head.strip() else []
+    j = i + 1
+    while j < len(lines):
+        s = lines[j].strip()
+        if s.endswith("```"):
+            tail = s[:-3].strip()
+            if tail:
+                body.append(tail)
+            return "\n".join(body), j + 1
+        body.append(s)
+        j += 1
+    return "\n".join(body), j
+
+
 def parse_table(path: Path) -> dict:
     lines = path.read_text(encoding="utf-8-sig").splitlines()
     table: dict = {"name": "", "columns": [], "measures": [], "partitions": [], "properties": {}}
@@ -55,7 +74,15 @@ def parse_table(path: Path) -> dict:
         elif ind == 1 and kind in {"measure", "calculatedColumn"}:
             expr = rest or ""
             j = i + 1
-            if not expr:  # expression starts on the next, deeper-indented lines
+            if expr.startswith("```"):  # fenced multi-line expression (common in real exports)
+                expr, j = _fenced(lines, i, expr)
+                props = {}
+                while j < len(lines) and lines[j].strip() and _indent(lines[j]) > 1:
+                    pm = re.match(r"^\s*(\w+):\s*(.*)$", lines[j])
+                    if pm:
+                        props[pm.group(1)] = pm.group(2)
+                    j += 1
+            elif not expr:  # expression starts on the next, deeper-indented lines
                 expr, j = _block_text(lines, i + 1, 1)
                 # properties (formatString etc.) sit at indent 2 AFTER the expression;
                 # _block_text swallowed them, so split them back out.
@@ -93,8 +120,14 @@ def parse_table(path: Path) -> dict:
                 s = lines[j].strip()
                 if s.startswith("mode:"):
                     part["mode"] = s.split(":", 1)[1].strip()
+                elif s.startswith(("entityName:", "schemaName:")):  # Direct Lake / entity partitions
+                    key, val = s.split(":", 1)
+                    part[key.strip()] = val.strip()
                 elif s.startswith("source ="):
                     inline = s.split("=", 1)[1].strip()
+                    if inline.startswith("```"):
+                        part["source"], j = _fenced(lines, j, inline)
+                        continue
                     if inline:
                         part["source"] = inline
                     else:
@@ -158,8 +191,49 @@ def _field_ref(field: dict) -> dict | None:
     return None
 
 
+def _legacy_field(sel: dict, alias: dict) -> dict | None:
+    """Field reference from a legacy report.json prototypeQuery 'Select' entry."""
+    if "Aggregation" in sel:  # e.g. Sum(Table.Column)
+        inner = sel["Aggregation"].get("Expression", {})
+        return _legacy_field(inner, alias)
+    for kind in ("Column", "Measure"):
+        node = sel.get(kind)
+        if node:
+            src = node.get("Expression", {}).get("SourceRef", {})
+            entity = src.get("Entity") or alias.get(src.get("Source"))
+            return {"kind": kind.lower(), "table": entity, "name": node.get("Property")}
+    return None
+
+
+def parse_report_legacy(report_dir: Path) -> dict:
+    """Older single-file report format: report.json with sections -> visualContainers."""
+    rj = json.loads((report_dir / "report.json").read_text(encoding="utf-8-sig"))
+    pages = []
+    for sec in rj.get("sections", []):
+        visuals = []
+        for vc in sec.get("visualContainers", []):
+            try:
+                cfg = json.loads(vc.get("config") or "{}")
+            except json.JSONDecodeError:
+                continue
+            sv = cfg.get("singleVisual")
+            if not sv:
+                continue
+            pq = sv.get("prototypeQuery", {})
+            alias = {f.get("Name"): f.get("Entity") for f in pq.get("From", [])}
+            fields = []
+            for sel in pq.get("Select", []):
+                if (ref := _legacy_field(sel, alias)):
+                    fields.append({"role": "Values", **ref})
+            visuals.append({"id": cfg.get("name"), "type": sv.get("visualType"), "fields": fields})
+        pages.append({"id": sec.get("name"), "name": sec.get("displayName") or sec.get("name"), "visuals": visuals})
+    return {"pages": pages, "format": "legacy"}
+
+
 def parse_report(report_dir: Path) -> dict:
     defn = report_dir / "definition"
+    if not (defn / "pages" / "pages.json").exists() and (report_dir / "report.json").exists():
+        return parse_report_legacy(report_dir)
     pages_meta = json.loads((defn / "pages" / "pages.json").read_text(encoding="utf-8"))
     pages = []
     for page_id in pages_meta.get("pageOrder", []):
@@ -198,8 +272,38 @@ def lint_model(model: dict) -> list[str]:
 
 # ------------------------------------------------------------------ orchestration
 
+def _load_id_to_name(raw_root: Path) -> dict:
+    """Map item id -> display name using the manifest written by the extractor (if present)."""
+    mf = raw_root / "_manifest.json"
+    if not mf.exists():
+        return {}
+    try:
+        items = json.loads(mf.read_text(encoding="utf-8-sig", errors="replace"))
+    except json.JSONDecodeError:
+        return {}
+    if isinstance(items, dict):
+        items = [items]
+    return {str(i.get("itemId", "")).lower(): i.get("item") for i in items if i.get("itemId")}
+
+
+def _model_from_pbir(ref: dict, id_to_name: dict) -> str | None:
+    """Find which semantic model a report is bound to (by path, connection string or model id)."""
+    path = ref.get("byPath", {}).get("path", "")
+    if path:
+        return Path(path).name.removesuffix(".SemanticModel") or None
+    conn = ref.get("byConnection", {})
+    m = re.search(r'initial catalog=([^;"]+)', conn.get("connectionString") or "", re.I)
+    if m and not re.fullmatch(r"[0-9a-fA-F-]{36}", m.group(1).strip()):
+        return m.group(1).strip()
+    for guid in (conn.get("pbiModelDatabaseName"), m.group(1).strip() if m else None):
+        if guid and guid.lower() in id_to_name:
+            return id_to_name[guid.lower()]
+    return None
+
+
 def build(raw_root: Path) -> dict:
     result = {"workspaces": []}
+    id_to_name = _load_id_to_name(raw_root)
     for ws_dir in sorted(p for p in raw_root.iterdir() if p.is_dir()):
         ws = {"name": ws_dir.name, "models": {}, "reports": []}
         for model_dir in sorted(ws_dir.glob("*.SemanticModel")):
@@ -209,6 +313,9 @@ def build(raw_root: Path) -> dict:
                 srcs = []
                 for part in t["partitions"]:
                     srcs += extract_sources(part["source"])
+                    if part.get("entityName"):  # Direct Lake / warehouse-backed table
+                        srcs.append({"type": "Fabric (Direct Lake)", "schema": part.get("schemaName"),
+                                     "table": part["entityName"]})
                 t["sources"] = srcs
             model = {"name": model_dir.name.removesuffix(".SemanticModel"),
                      "tables": tables, "relationships": parse_relationships(defn / "relationships.tmdl")}
@@ -216,14 +323,19 @@ def build(raw_root: Path) -> dict:
             ws["models"][model["name"]] = model
 
         for rep_dir in sorted(ws_dir.glob("*.Report")):
-            rep = parse_report(rep_dir)
+            try:
+                rep = parse_report(rep_dir)
+            except (FileNotFoundError, json.JSONDecodeError, KeyError) as exc:
+                # Legacy (non-PBIR) reports have no pages/ folder; keep going instead of crashing
+                print(f"WARNING: could not parse report {rep_dir.name} ({type(exc).__name__}); "
+                      "skipping page/visual detail")
+                rep = {"pages": [], "parse_warning": f"{type(exc).__name__}: {exc}"}
             rep["name"] = rep_dir.name.removesuffix(".Report")
             pbir = rep_dir / "definition.pbir"
             rep["model"] = None
             if pbir.exists():
-                ref = json.loads(pbir.read_text(encoding="utf-8")).get("datasetReference", {})
-                path = ref.get("byPath", {}).get("path", "")
-                rep["model"] = Path(path).name.removesuffix(".SemanticModel") or None
+                ref = json.loads(pbir.read_text(encoding="utf-8-sig")).get("datasetReference", {})
+                rep["model"] = _model_from_pbir(ref, id_to_name)
             ws["reports"].append(rep)
         result["workspaces"].append(ws)
     return result

@@ -1,6 +1,6 @@
 # Power BI Dashboard Metadata Pipeline
 
-Automatically document every Power BI dashboard in a Microsoft Fabric / Premium estate: what each one is for, which KPIs it shows, which pages it has, and where its data comes from. It reads the dashboards' own definitions (TMDL and PBIR) and uses Claude to turn them into plain-English catalog entries.
+Automatically document every Power BI report and semantic model in a Microsoft Fabric / Premium estate: what each one is for, which KPIs it shows, which pages or tables it has, and where its data comes from. It reads the items' own definitions (TMDL for models, PBIR or legacy report JSON for reports) and uses Claude to turn them into plain-English catalog entries.
 
 > **Demo data only.** Everything in `sample_data/` is a synthetic port-operations model created for this repo. No employer or client data is included.
 
@@ -23,8 +23,8 @@ Fabric REST API            PowerShell            Python                 Claude A
 | Stage | File | What it does |
 |---|---|---|
 | 1. Extract | `extract/Export-FabricDefinitions.ps1` | Signs in as **you** (delegated auth, no service principal), lists workspaces and items, calls Get Item Definition (handles the 202 long-running-operation pattern and pagination), decodes parts to disk, writes a manifest of successes and failures. |
-| 2. Parse | `parse/parse_metadata.py` | Parses TMDL (tables, columns, measures incl. multi-line DAX, partitions) and PBIR (pages, visuals, field bindings) into one JSON. Extracts data sources from Power Query M (Snowflake, SQL Server, Excel, SharePoint). Lints measures for references to columns that don't exist. |
-| 3. Describe | `describe/generate_descriptions.py` | Builds a compact fact sheet per report and asks Claude for a structured description. The prompt restricts Claude to the facts supplied and requires a `confidence_notes` field, so inference is flagged rather than hidden. |
+| 2. Parse | `parse/parse_metadata.py` | Parses TMDL (tables, columns, measures incl. multi-line and fenced DAX, partitions) and report definitions (PBIR and the older single-file `report.json` format: pages, visuals, field bindings) into one JSON. Extracts data sources from Power Query M (Snowflake, SQL Server, Excel, SharePoint) and from Direct Lake entity partitions. Links each report to its semantic model. Lints measures for references to columns that don't exist. |
+| 3. Describe | `describe/generate_descriptions.py` | Builds a compact fact sheet per report and per semantic model and asks Claude for a structured description. The prompt restricts Claude to the facts supplied and requires a `confidence_notes` field, so inference is flagged rather than hidden. |
 
 ## Design decisions
 
@@ -68,7 +68,8 @@ Requirements: workspaces on Premium or Fabric capacity, and permission to read i
 ## Limitations
 
 - The TMDL parser covers the constructs needed for documentation (tables, columns, measures, partitions, relationships). It is not a full TMDL grammar: calculation groups, perspectives and roles are not parsed yet.
-- Reports must be in a format that exposes PBIR-style page and visual JSON. Older PBIX-style report definitions need a different parser.
+- Report parsing covers PBIR and the older `report.json` format. Visual field roles (axis, legend, values) are only captured for PBIR; legacy reports record the fields used but not their roles.
+- Stage 1 has been tested end to end on a single Fabric trial workspace. Large tenants may need extra throttling and retry handling.
 - The measure-reference lint is regex-based and can miss unusual syntax.
 - Descriptions are drafts. A human should review the `confidence_notes` before publishing a catalog.
 
@@ -81,6 +82,27 @@ Requirements: workspaces on Premium or Fabric capacity, and permission to read i
 - Build a column-level lineage view (source table to measure to visual)
 
 ## Results
+
+### Tested on a real Fabric workspace
+
+I ran the full pipeline (extract, parse, describe) against my own personal Fabric trial workspace. `stats.py` reported:
+
+```
+Workspaces:        1
+Semantic models:   3
+Reports:           1
+Pages:             1
+Visuals:           1
+Tables:            12
+DAX measures:      8
+Relationships:     8
+Data sources:      {'Fabric (Direct Lake)': 11}
+Lint findings:     0
+```
+
+It was a small workspace, so these are modest numbers. The point is that every stage works against a live tenant. The generated catalog describes the report and all three semantic models in plain English, with confidence notes separating what is stated in the definitions from what is inferred.
+
+### Demo model (included in the repo)
 
 Output of `python parse/stats.py --metadata sample_data/expected_output/metadata.json` on the included demo model:
 
@@ -101,7 +123,7 @@ Lint findings:     2
 
 The two lint findings are deliberate: the demo model contains a measure that references columns that don't exist, and the pipeline flags it automatically.
 
-Run `stats.py` on your own export to get the same summary for a real estate.
+Run `stats.py` on your own export to get the same summary for your estate.
 
 ---
 Author: Santosh Pothula
