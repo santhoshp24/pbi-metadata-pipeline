@@ -1,0 +1,56 @@
+table Vessel_Calls
+	lineageTag: 5f1c0a52-0000-4000-8000-000000000001
+
+	measure 'Total Calls' = COUNTROWS(Vessel_Calls)
+		formatString: #,0
+
+	measure 'Avg Turnaround (hrs)' =
+			AVERAGEX(
+			    Vessel_Calls,
+			    DATEDIFF(Vessel_Calls[ArrivalTime], Vessel_Calls[DepartureTime], HOUR)
+			)
+		formatString: 0.0
+
+	measure 'On-Time Arrival %' =
+			DIVIDE(
+			    CALCULATE(COUNTROWS(Vessel_Calls), Vessel_Calls[IsOnTime] = TRUE()),
+			    [Total Calls]
+			)
+		formatString: 0.0%
+
+	measure 'Calls LY' = CALCULATE([Total Calls], SAMEPERIODLASTYEAR(Dim_Date[Date]))
+
+	column VesselKey
+		dataType: int64
+		sourceColumn: VesselKey
+
+	column PortKey
+		dataType: int64
+		sourceColumn: PortKey
+
+	column ArrivalDate
+		dataType: dateTime
+		sourceColumn: ArrivalDate
+
+	column ArrivalTime
+		dataType: dateTime
+		sourceColumn: ArrivalTime
+
+	column DepartureTime
+		dataType: dateTime
+		sourceColumn: DepartureTime
+
+	column IsOnTime
+		dataType: boolean
+		sourceColumn: IsOnTime
+
+	partition Vessel_Calls = m
+		mode: import
+		source =
+				let
+				    Source = Snowflake.Databases("demo-account.snowflakecomputing.com", "DEMO_WH"),
+				    Db = Source{[Name="DEMO_MARITIME", Kind="Database"]}[Data],
+				    Sch = Db{[Name="CURATED", Kind="Schema"]}[Data],
+				    Tbl = Sch{[Name="FACT_VESSEL_CALLS", Kind="Table"]}[Data]
+				in
+				    Tbl

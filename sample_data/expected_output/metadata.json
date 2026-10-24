@@ -1,0 +1,334 @@
+{
+  "workspaces": [
+    {
+      "name": "Demo_Workspace",
+      "models": {
+        "Port_Operations_Demo": {
+          "name": "Port_Operations_Demo",
+          "tables": [
+            {
+              "name": "Dim_Date",
+              "columns": [
+                {
+                  "name": "Date",
+                  "dataType": "dateTime",
+                  "sourceColumn": "Date"
+                },
+                {
+                  "name": "Year",
+                  "dataType": "int64",
+                  "sourceColumn": "Year"
+                },
+                {
+                  "name": "Month",
+                  "dataType": "string",
+                  "sourceColumn": "Month"
+                }
+              ],
+              "measures": [],
+              "partitions": [
+                {
+                  "name": "Dim_Date",
+                  "type": "calculated",
+                  "mode": "import",
+                  "source": "CALENDARAUTO()"
+                }
+              ],
+              "properties": {},
+              "sources": []
+            },
+            {
+              "name": "Dim_Port",
+              "columns": [
+                {
+                  "name": "PortKey",
+                  "dataType": "int64",
+                  "sourceColumn": "PortKey"
+                },
+                {
+                  "name": "PortName",
+                  "dataType": "string",
+                  "sourceColumn": "PortName"
+                },
+                {
+                  "name": "Terminal",
+                  "dataType": "string",
+                  "sourceColumn": "Terminal"
+                }
+              ],
+              "measures": [],
+              "partitions": [
+                {
+                  "name": "Dim_Port",
+                  "type": "m",
+                  "mode": "import",
+                  "source": "let\nSource = Snowflake.Databases(\"demo-account.snowflakecomputing.com\", \"DEMO_WH\"),\nDb = Source{[Name=\"DEMO_MARITIME\", Kind=\"Database\"]}[Data],\nSch = Db{[Name=\"CURATED\", Kind=\"Schema\"]}[Data],\nTbl = Sch{[Name=\"DIM_PORT\", Kind=\"Table\"]}[Data]\nin\nTbl"
+                }
+              ],
+              "properties": {},
+              "sources": [
+                {
+                  "type": "Snowflake",
+                  "server": "demo-account.snowflakecomputing.com",
+                  "database": "DEMO_MARITIME",
+                  "schema": "CURATED",
+                  "table": "DIM_PORT"
+                }
+              ]
+            },
+            {
+              "name": "Dim_Vessel",
+              "columns": [
+                {
+                  "name": "VesselKey",
+                  "dataType": "int64",
+                  "sourceColumn": "VesselKey"
+                },
+                {
+                  "name": "VesselName",
+                  "dataType": "string",
+                  "sourceColumn": "VesselName"
+                },
+                {
+                  "name": "VesselType",
+                  "dataType": "string",
+                  "sourceColumn": "VesselType"
+                }
+              ],
+              "measures": [],
+              "partitions": [
+                {
+                  "name": "Dim_Vessel",
+                  "type": "m",
+                  "mode": "import",
+                  "source": "let\nSource = Snowflake.Databases(\"demo-account.snowflakecomputing.com\", \"DEMO_WH\"),\nDb = Source{[Name=\"DEMO_MARITIME\", Kind=\"Database\"]}[Data],\nSch = Db{[Name=\"CURATED\", Kind=\"Schema\"]}[Data],\nTbl = Sch{[Name=\"DIM_VESSEL\", Kind=\"Table\"]}[Data]\nin\nTbl"
+                }
+              ],
+              "properties": {},
+              "sources": [
+                {
+                  "type": "Snowflake",
+                  "server": "demo-account.snowflakecomputing.com",
+                  "database": "DEMO_MARITIME",
+                  "schema": "CURATED",
+                  "table": "DIM_VESSEL"
+                }
+              ]
+            },
+            {
+              "name": "Vessel_Calls",
+              "columns": [
+                {
+                  "name": "VesselKey",
+                  "dataType": "int64",
+                  "sourceColumn": "VesselKey"
+                },
+                {
+                  "name": "PortKey",
+                  "dataType": "int64",
+                  "sourceColumn": "PortKey"
+                },
+                {
+                  "name": "ArrivalDate",
+                  "dataType": "dateTime",
+                  "sourceColumn": "ArrivalDate"
+                },
+                {
+                  "name": "ArrivalTime",
+                  "dataType": "dateTime",
+                  "sourceColumn": "ArrivalTime"
+                },
+                {
+                  "name": "DepartureTime",
+                  "dataType": "dateTime",
+                  "sourceColumn": "DepartureTime"
+                },
+                {
+                  "name": "IsOnTime",
+                  "dataType": "boolean",
+                  "sourceColumn": "IsOnTime"
+                }
+              ],
+              "measures": [
+                {
+                  "name": "Total Calls",
+                  "expression": "COUNTROWS(Vessel_Calls)",
+                  "format": "#,0",
+                  "displayFolder": null
+                },
+                {
+                  "name": "Avg Turnaround (hrs)",
+                  "expression": "AVERAGEX(\nVessel_Calls,\nDATEDIFF(Vessel_Calls[ArrivalTime], Vessel_Calls[DepartureTime], HOUR)\n)",
+                  "format": "0.0",
+                  "displayFolder": null
+                },
+                {
+                  "name": "On-Time Arrival %",
+                  "expression": "DIVIDE(\nCALCULATE(COUNTROWS(Vessel_Calls), Vessel_Calls[IsOnTime] = TRUE()),\n[Total Calls]\n)",
+                  "format": "0.0%",
+                  "displayFolder": null
+                },
+                {
+                  "name": "Calls LY",
+                  "expression": "CALCULATE([Total Calls], SAMEPERIODLASTYEAR(Dim_Date[Date]))",
+                  "format": null,
+                  "displayFolder": null
+                }
+              ],
+              "partitions": [
+                {
+                  "name": "Vessel_Calls",
+                  "type": "m",
+                  "mode": "import",
+                  "source": "let\nSource = Snowflake.Databases(\"demo-account.snowflakecomputing.com\", \"DEMO_WH\"),\nDb = Source{[Name=\"DEMO_MARITIME\", Kind=\"Database\"]}[Data],\nSch = Db{[Name=\"CURATED\", Kind=\"Schema\"]}[Data],\nTbl = Sch{[Name=\"FACT_VESSEL_CALLS\", Kind=\"Table\"]}[Data]\nin\nTbl"
+                }
+              ],
+              "properties": {},
+              "sources": [
+                {
+                  "type": "Snowflake",
+                  "server": "demo-account.snowflakecomputing.com",
+                  "database": "DEMO_MARITIME",
+                  "schema": "CURATED",
+                  "table": "FACT_VESSEL_CALLS"
+                }
+              ]
+            },
+            {
+              "name": "_Measures",
+              "columns": [],
+              "measures": [
+                {
+                  "name": "Calls YoY %",
+                  "expression": "DIVIDE([Total Calls] - [Calls LY], [Calls LY])",
+                  "format": "0.0%",
+                  "displayFolder": null
+                },
+                {
+                  "name": "Berth Utilisation %",
+                  "expression": "VAR _used = SUM(Dim_Port[OccupiedHours])\nVAR _avail = SUM(Dim_Port[AvailableHours])\nRETURN DIVIDE(_used, _avail)",
+                  "format": "0.0%",
+                  "displayFolder": null
+                }
+              ],
+              "partitions": [
+                {
+                  "name": "_Measures",
+                  "type": "m",
+                  "mode": "import",
+                  "source": "#table({\"x\"}, {})"
+                }
+              ],
+              "properties": {},
+              "sources": []
+            }
+          ],
+          "relationships": [
+            {
+              "from": "Vessel_Calls.VesselKey",
+              "to": "Dim_Vessel.VesselKey"
+            },
+            {
+              "from": "Vessel_Calls.PortKey",
+              "to": "Dim_Port.PortKey"
+            },
+            {
+              "from": "Vessel_Calls.ArrivalDate",
+              "to": "Dim_Date.Date"
+            }
+          ],
+          "lint": [
+            "_Measures[Berth Utilisation %] references missing Dim_Port[AvailableHours]",
+            "_Measures[Berth Utilisation %] references missing Dim_Port[OccupiedHours]"
+          ]
+        }
+      },
+      "reports": [
+        {
+          "pages": [
+            {
+              "id": "p1",
+              "name": "Port Performance Overview",
+              "visuals": [
+                {
+                  "id": "v1",
+                  "type": "card",
+                  "fields": [
+                    {
+                      "role": "Values",
+                      "kind": "measure",
+                      "table": "Vessel_Calls",
+                      "name": "On-Time Arrival %"
+                    }
+                  ]
+                },
+                {
+                  "id": "v2",
+                  "type": "lineChart",
+                  "fields": [
+                    {
+                      "role": "Category",
+                      "kind": "column",
+                      "table": "Dim_Date",
+                      "name": "Month"
+                    },
+                    {
+                      "role": "Y",
+                      "kind": "measure",
+                      "table": "Vessel_Calls",
+                      "name": "Total Calls"
+                    },
+                    {
+                      "role": "Y",
+                      "kind": "measure",
+                      "table": "Vessel_Calls",
+                      "name": "Calls LY"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "p2",
+              "name": "Vessel Drill-through",
+              "visuals": [
+                {
+                  "id": "v3",
+                  "type": "tableEx",
+                  "fields": [
+                    {
+                      "role": "Values",
+                      "kind": "column",
+                      "table": "Dim_Vessel",
+                      "name": "VesselName"
+                    },
+                    {
+                      "role": "Values",
+                      "kind": "column",
+                      "table": "Dim_Port",
+                      "name": "PortName"
+                    },
+                    {
+                      "role": "Values",
+                      "kind": "measure",
+                      "table": "Vessel_Calls",
+                      "name": "Avg Turnaround (hrs)"
+                    },
+                    {
+                      "role": "Values",
+                      "kind": "measure",
+                      "table": "Vessel_Calls",
+                      "name": "Total Calls"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "name": "Port_Operations_Demo",
+          "model": "Port_Operations_Demo"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+
+ref table Vessel_Calls
+ref table Dim_Vessel
+ref table Dim_Port
+ref table Dim_Date
+ref table _Measures

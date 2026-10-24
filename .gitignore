@@ -1,0 +1,8 @@
+# Real exports must never be committed - they contain business logic and connection details
+output/raw/
+output/*.json
+output/*.md
+!output/.gitkeep
+.env
+__pycache__/
+*.pyc

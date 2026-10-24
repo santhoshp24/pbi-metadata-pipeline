@@ -1,0 +1,26 @@
+table Dim_Vessel
+	lineageTag: 5f1c0a52-0000-4000-8000-000000000002
+
+	column VesselKey
+		dataType: int64
+		isKey
+		sourceColumn: VesselKey
+
+	column VesselName
+		dataType: string
+		sourceColumn: VesselName
+
+	column VesselType
+		dataType: string
+		sourceColumn: VesselType
+
+	partition Dim_Vessel = m
+		mode: import
+		source =
+				let
+				    Source = Snowflake.Databases("demo-account.snowflakecomputing.com", "DEMO_WH"),
+				    Db = Source{[Name="DEMO_MARITIME", Kind="Database"]}[Data],
+				    Sch = Db{[Name="CURATED", Kind="Schema"]}[Data],
+				    Tbl = Sch{[Name="DIM_VESSEL", Kind="Table"]}[Data]
+				in
+				    Tbl

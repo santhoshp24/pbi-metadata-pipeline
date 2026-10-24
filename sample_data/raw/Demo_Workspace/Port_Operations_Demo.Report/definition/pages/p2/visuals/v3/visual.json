@@ -1,0 +1,18 @@
+{
+  "name": "v3",
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            { "field": { "Column": { "Expression": { "SourceRef": { "Entity": "Dim_Vessel" } }, "Property": "VesselName" } } },
+            { "field": { "Column": { "Expression": { "SourceRef": { "Entity": "Dim_Port" } }, "Property": "PortName" } } },
+            { "field": { "Measure": { "Expression": { "SourceRef": { "Entity": "Vessel_Calls" } }, "Property": "Avg Turnaround (hrs)" } } },
+            { "field": { "Measure": { "Expression": { "SourceRef": { "Entity": "Vessel_Calls" } }, "Property": "Total Calls" } } }
+          ]
+        }
+      }
+    }
+  }
+}

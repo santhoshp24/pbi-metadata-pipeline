@@ -1,0 +1,20 @@
+table Dim_Date
+	lineageTag: 5f1c0a52-0000-4000-8000-000000000004
+	dataCategory: Time
+
+	column Date
+		dataType: dateTime
+		isKey
+		sourceColumn: Date
+
+	column Year
+		dataType: int64
+		sourceColumn: Year
+
+	column Month
+		dataType: string
+		sourceColumn: Month
+
+	partition Dim_Date = calculated
+		mode: import
+		source = CALENDARAUTO()

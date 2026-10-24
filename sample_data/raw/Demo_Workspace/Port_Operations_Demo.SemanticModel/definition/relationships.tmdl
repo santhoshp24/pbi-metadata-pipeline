@@ -1,0 +1,11 @@
+relationship 11111111-aaaa-4aaa-8aaa-000000000001
+	fromColumn: Vessel_Calls.VesselKey
+	toColumn: Dim_Vessel.VesselKey
+
+relationship 11111111-aaaa-4aaa-8aaa-000000000002
+	fromColumn: Vessel_Calls.PortKey
+	toColumn: Dim_Port.PortKey
+
+relationship 11111111-aaaa-4aaa-8aaa-000000000003
+	fromColumn: Vessel_Calls.ArrivalDate
+	toColumn: Dim_Date.Date

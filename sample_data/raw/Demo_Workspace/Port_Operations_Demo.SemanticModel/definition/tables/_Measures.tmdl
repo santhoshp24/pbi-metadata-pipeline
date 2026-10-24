@@ -1,0 +1,15 @@
+table _Measures
+	lineageTag: 5f1c0a52-0000-4000-8000-000000000005
+
+	measure 'Calls YoY %' = DIVIDE([Total Calls] - [Calls LY], [Calls LY])
+		formatString: 0.0%
+
+	measure 'Berth Utilisation %' =
+			VAR _used = SUM(Dim_Port[OccupiedHours])
+			VAR _avail = SUM(Dim_Port[AvailableHours])
+			RETURN DIVIDE(_used, _avail)
+		formatString: 0.0%
+
+	partition _Measures = m
+		mode: import
+		source = #table({"x"}, {})

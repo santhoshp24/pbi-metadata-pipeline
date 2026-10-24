@@ -1,0 +1,26 @@
+table Dim_Port
+	lineageTag: 5f1c0a52-0000-4000-8000-000000000003
+
+	column PortKey
+		dataType: int64
+		isKey
+		sourceColumn: PortKey
+
+	column PortName
+		dataType: string
+		sourceColumn: PortName
+
+	column Terminal
+		dataType: string
+		sourceColumn: Terminal
+
+	partition Dim_Port = m
+		mode: import
+		source =
+				let
+				    Source = Snowflake.Databases("demo-account.snowflakecomputing.com", "DEMO_WH"),
+				    Db = Source{[Name="DEMO_MARITIME", Kind="Database"]}[Data],
+				    Sch = Db{[Name="CURATED", Kind="Schema"]}[Data],
+				    Tbl = Sch{[Name="DIM_PORT", Kind="Table"]}[Data]
+				in
+				    Tbl

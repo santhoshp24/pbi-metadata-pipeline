@@ -1,0 +1,21 @@
+{
+  "name": "v2",
+  "visual": {
+    "visualType": "lineChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            { "field": { "Column": { "Expression": { "SourceRef": { "Entity": "Dim_Date" } }, "Property": "Month" } } }
+          ]
+        },
+        "Y": {
+          "projections": [
+            { "field": { "Measure": { "Expression": { "SourceRef": { "Entity": "Vessel_Calls" } }, "Property": "Total Calls" } } },
+            { "field": { "Measure": { "Expression": { "SourceRef": { "Entity": "Vessel_Calls" } }, "Property": "Calls LY" } } }
+          ]
+        }
+      }
+    }
+  }
+}
