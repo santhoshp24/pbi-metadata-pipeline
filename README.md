@@ -82,7 +82,26 @@ Requirements: workspaces on Premium or Fabric capacity, and permission to read i
 
 ## Results
 
-_Add your real numbers here before posting, for example: number of dashboards documented, hours saved versus manual documentation, number of workspaces covered, issues found by the lint._
+Output of `python parse/stats.py --metadata sample_data/expected_output/metadata.json` on the included demo model:
+
+```
+Workspaces:        1
+Semantic models:   1
+Reports:           1
+Pages:             2
+Visuals:           3
+Tables:            5
+DAX measures:      6
+Relationships:     3
+Data sources:      {'Snowflake': 3}
+Lint findings:     2
+  - _Measures[Berth Utilisation %] references missing Dim_Port[AvailableHours]
+  - _Measures[Berth Utilisation %] references missing Dim_Port[OccupiedHours]
+```
+
+The two lint findings are deliberate: the demo model contains a measure that references columns that don't exist, and the pipeline flags it automatically.
+
+Run `stats.py` on your own export to get the same summary for a real estate.
 
 ---
 Author: Santosh Pothula
